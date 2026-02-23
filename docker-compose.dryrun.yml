@@ -1,0 +1,26 @@
+networks:
+  traefik:
+    external: true
+    driver: overlay
+    attachable: true
+  cloudflare:
+    external: true
+    driver: overlay
+    attachable: true
+  cloudflare-warp:
+    external: true
+    driver: overlay
+    attachable: true
+
+# Compose override for dry-run mode.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dryrun.yml up warplab-controller
+services:
+  warplab-controller:
+    env_file:
+      - .env
+    build: .
+    environment:
+      WARPLAB_DRY_RUN: "true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+#      - controller-data:/data

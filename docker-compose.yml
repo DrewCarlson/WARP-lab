@@ -1,0 +1,75 @@
+networks:
+  traefik:
+    ipam:
+      config:
+        - subnet: 172.24.0.0/16
+  cloudflare-public:
+    ipam:
+      config:
+        - subnet: 172.29.0.0/16
+  cloudflare-warp:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  controller-data:
+  dnsmasq-config:
+
+services:
+  warplab-controller:
+    build: .
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - controller-data:/data
+      - dnsmasq-config:/etc/dnsmasq.d
+    environment:
+      CF_API_TOKEN: "${CF_API_TOKEN}"
+      CF_ACCOUNT_ID: "${CF_ACCOUNT_ID}"
+      CF_PUBLIC_TUNNEL_ID: "${CF_PUBLIC_TUNNEL_ID}"
+      CF_WARP_TUNNEL_ID: "${CF_WARP_TUNNEL_ID}"
+      WARPLAB_DOMAIN: "${WARPLAB_DOMAIN}"
+      WARPLAB_SSH_SUBDOMAIN: "${WARPLAB_SSH_SUBDOMAIN:-ssh}"
+    networks:
+      - cloudflare-warp
+    depends_on:
+      - dnsmasq
+
+  dnsmasq:
+    image: jpillora/dnsmasq
+    volumes:
+      - dnsmasq-config:/etc/dnsmasq.d
+    networks:
+      - traefik
+      - cloudflare-warp
+
+  cloudflare-public:
+    image: cloudflare/cloudflared:latest
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: "${CF_PUBLIC_TUNNEL_TOKEN}"
+    networks:
+      - cloudflare-public
+
+  cloudflare-warp:
+    image: cloudflare/cloudflared:latest
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: "${CF_WARP_TUNNEL_TOKEN}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - cloudflare-warp
+
+  traefik:
+    image: traefik:v3.2
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik
+      - cloudflare-public
+      - cloudflare-warp
