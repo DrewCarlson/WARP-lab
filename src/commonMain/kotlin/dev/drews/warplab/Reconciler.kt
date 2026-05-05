@@ -158,17 +158,39 @@ class Reconciler(
         if (dnsmasqWarpIp == null) {
             logger.warn { "dnsmasq not found on cloudflare-warp network, skipping WARP fallback sync" }
         } else {
-            val fallback = FallbackDomainEntry(
-                suffix = config.domain,
-                dnsServers = listOf(dnsmasqWarpIp),
-                description = "warplab-controller managed",
-            )
+            val baseSuffix = config.domain
+            val externalHostnames = containers
+                .mapNotNull { parseLabels(it.labels)?.hostname }
+                .filterNot { it == baseSuffix || it.endsWith(".$baseSuffix") }
+                .distinct()
+
+            val fallbacks = buildList {
+                add(
+                    FallbackDomainEntry(
+                        suffix = baseSuffix,
+                        dnsServers = listOf(dnsmasqWarpIp),
+                        description = "${WarpConfigManager.MANAGED_PREFIX}:$baseSuffix",
+                    )
+                )
+                for (hostname in externalHostnames) {
+                    add(
+                        FallbackDomainEntry(
+                            suffix = hostname,
+                            dnsServers = listOf(dnsmasqWarpIp),
+                            description = "${WarpConfigManager.MANAGED_PREFIX}:$hostname",
+                        )
+                    )
+                }
+            }
+
             if (dryRun) {
-                logger.info { "[DRY-RUN] === Step 5: WARP fallback domain (would PUT) ===" }
-                logger.info { "[DRY-RUN]   suffix=${fallback.suffix}, dnsServers=${fallback.dnsServers}" }
+                logger.info { "[DRY-RUN] === Step 5: WARP fallback domains (would PUT) ===" }
+                for (fb in fallbacks) {
+                    logger.info { "[DRY-RUN]   suffix=${fb.suffix}, dnsServers=${fb.dnsServers}" }
+                }
             } else {
                 try {
-                    warpConfigManager.sync(fallback)
+                    warpConfigManager.sync(fallbacks)
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to sync WARP fallback" }
                 }

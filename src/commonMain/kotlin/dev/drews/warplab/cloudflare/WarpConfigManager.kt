@@ -8,7 +8,11 @@ class WarpConfigManager(
     private val client: CloudflareClient,
 ) {
     private val logger = KotlinLogging.logger {}
-    suspend fun sync(desired: FallbackDomainEntry) {
+
+    companion object {
+        const val MANAGED_PREFIX = "warplab-controller managed"
+    }
+    suspend fun sync(desired: List<FallbackDomainEntry>) {
         val currentResponse = client.getFallbackDomains()
         if (!currentResponse.success || currentResponse.result == null) {
             logger.error { "Failed to get fallback domains: ${currentResponse.errors}" }
@@ -16,29 +20,26 @@ class WarpConfigManager(
         }
 
         val currentList = currentResponse.result
-        val existingEntry = currentList.find { it.suffix == desired.suffix }
+        val unmanaged = currentList.filterNot { it.description.startsWith(MANAGED_PREFIX) }
 
-        if (existingEntry != null &&
-            existingEntry.dnsServer == desired.dnsServers &&
-            existingEntry.description == desired.description
+        val desiredFallbacks = desired.map {
+            FallbackDomain(
+                suffix = it.suffix,
+                dnsServer = it.dnsServers,
+                description = it.description,
+            )
+        }
+
+        val updatedList = unmanaged + desiredFallbacks
+
+        if (currentList.size == updatedList.size &&
+            currentList.toSet() == updatedList.toSet()
         ) {
-            logger.info { "WARP fallback for ${desired.suffix} unchanged (${desired.dnsServers}), skipping update" }
+            logger.info { "WARP fallback unchanged (${desired.size} managed entries), skipping update" }
             return
         }
 
-        val newEntry = FallbackDomain(
-            suffix = desired.suffix,
-            dnsServer = desired.dnsServers,
-            description = desired.description,
-        )
-
-        val updatedList = if (existingEntry != null) {
-            currentList.map { if (it.suffix == desired.suffix) newEntry else it }
-        } else {
-            currentList + newEntry
-        }
-
-        logger.info { "Updating WARP fallback: ${desired.suffix} → ${desired.dnsServers}" }
+        logger.info { "Updating WARP fallback: ${desired.size} managed entries (${desired.joinToString { it.suffix }})" }
         val response = client.putFallbackDomains(updatedList)
         if (response.success) {
             logger.info { "WARP fallback updated successfully" }
