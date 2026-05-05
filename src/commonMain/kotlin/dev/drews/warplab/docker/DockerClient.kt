@@ -7,7 +7,9 @@ import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.utils.io.*
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.Json
 
@@ -47,7 +49,7 @@ class DockerClient(
         return response.body()
     }
 
-    fun streamEvents(filters: Map<String, List<String>>): Flow<DockerEvent> = flow {
+    fun streamEvents(filters: Map<String, List<String>>): Flow<DockerEvent> = callbackFlow {
         val filtersJson = json.encodeToString(filters)
         httpClient.prepareGet("$baseUrl/events") {
             parameter("filters", filtersJson)
@@ -58,11 +60,12 @@ class DockerClient(
                 if (line.isBlank()) continue
                 try {
                     val event = json.decodeFromString<DockerEvent>(line)
-                    emit(event)
+                    send(event)
                 } catch (e: Exception) {
                     logger.warn(e) { "Failed to parse Docker event: $line" }
                 }
             }
         }
+        awaitClose()
     }
 }
