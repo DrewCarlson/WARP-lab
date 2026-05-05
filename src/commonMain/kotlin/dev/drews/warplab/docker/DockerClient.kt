@@ -10,7 +10,6 @@ import io.ktor.utils.io.*
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.Json
 
 
@@ -23,6 +22,7 @@ class DockerClient(
     private val baseUrl = "http://localhost/v1.47"
 
     private val httpClient = client.config {
+        install(HttpTimeout)
         defaultRequest {
             url("http://localhost/v1.47")
             if (socketPath != null) {
@@ -53,6 +53,10 @@ class DockerClient(
         val filtersJson = json.encodeToString(filters)
         httpClient.prepareGet("$baseUrl/events") {
             parameter("filters", filtersJson)
+            timeout {
+                requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
+                socketTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
+            }
         }.execute { response ->
             val channel: ByteReadChannel = response.bodyAsChannel()
             while (!channel.isClosedForRead) {
