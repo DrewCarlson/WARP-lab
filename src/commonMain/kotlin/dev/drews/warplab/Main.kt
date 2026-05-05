@@ -37,6 +37,9 @@ fun runController() = runBlocking {
     }
 
     val dockerHttpClient = HttpClient(CIO) {
+        engine {
+            requestTimeout = 0
+        }
         install(ContentNegotiation) {
             json(json)
         }
