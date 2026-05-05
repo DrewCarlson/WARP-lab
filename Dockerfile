@@ -1,6 +1,8 @@
 FROM ubuntu:noble
 
-RUN apt-get update \
+RUN sed -i -E 's|https?://(archive\|security)\.ubuntu\.com/ubuntu|http://us-east-1.ec2.archive.ubuntu.com/ubuntu|g' \
+           /etc/apt/sources.list.d/ubuntu.sources \
+    && apt-get update \
     && apt-get install -y --no-install-recommends libcurl4 ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
