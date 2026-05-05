@@ -1,5 +1,9 @@
 FROM ubuntu:noble
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libcurl4 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY build/bin/linuxX64/releaseExecutable/warplab-controller.kexe ./warplab-controller-x64

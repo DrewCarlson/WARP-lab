@@ -10,6 +10,7 @@ import dev.drews.warplab.docker.DockerWatcher
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
+import io.ktor.client.engine.curl.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.FlowPreview
@@ -35,16 +36,22 @@ fun runController() = runBlocking {
         encodeDefaults = true
     }
 
-    val httpClient = HttpClient(CIO) {
+    val dockerHttpClient = HttpClient(CIO) {
         install(ContentNegotiation) {
             json(json)
         }
     }
 
-    val dockerClient = DockerClient(client = httpClient, json = json)
+    val curlHttpClient = HttpClient(Curl) {
+        install(ContentNegotiation) {
+            json(json)
+        }
+    }
+
+    val dockerClient = DockerClient(client = dockerHttpClient, json = json)
     val docker = DockerWatcher(dockerClient)
-    val dnsmasq = DnsmasqGenerator(httpClient = httpClient)
-    val cfClient = CloudflareClient(httpClient, config.cfApiToken, config.cfAccountId)
+    val dnsmasq = DnsmasqGenerator(httpClient = curlHttpClient)
+    val cfClient = CloudflareClient(curlHttpClient, config.cfApiToken, config.cfAccountId)
     val ingressManager = IngressManager(cfClient, config.cfPublicTunnelId)
     val warpConfigManager = WarpConfigManager(cfClient)
 
